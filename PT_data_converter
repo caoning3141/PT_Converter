@@ -1,0 +1,36 @@
+transform = GridSample(
+    grid_size=0.5,
+    hash_type="fnv",
+    mode="train",
+    keys=("coord", "feat", "segment", "batch", "target"),
+    return_grid_coord=True,
+)
+
+
+def get_PT_input(points, target, transform): 
+    #points, NKC, target: NxKx2x1
+
+    N,K,C = points.shape
+    # get PT data
+    data = {}
+    points = points.reshape(-1, points.shape[2]) # K'C ## The expected input format for torch.nn.Conv1d is NCKc
+    target_label2 = (target[:,:,0,0]>target[:,:,1,0]).reshape(-1)
+    # Get input data. Transform input is numpy array
+    data['coord'] = points[:,:3].cpu().detach().numpy() 
+    data['feat'] = points.cpu().detach().numpy()
+    data['segment'] = target_label2.cpu().detach().numpy().astype(np.int32)
+    # get batch indices. You might need to change here
+    batch = np.zeros(N*K,)
+    for ibatch in range(N):
+        batch[ibatch*K:(ibatch+1)*K] = ibatch
+    data['batch'] = torch.tensor(batch, dtype=torch.int64).cuda()
+    data['target'] = target.reshape(-1,2).cuda()
+
+    data_dict = transform(data)  # Apply the transformation to the data
+
+    data_dict['coord'] = torch.tensor(data_dict['coord']).cuda()
+    data_dict['feat'] = torch.tensor(data_dict['feat']).cuda()
+    data_dict['segment'] = torch.tensor(data_dict['segment']).cuda()
+    data_dict['grid_coord'] = torch.tensor(data_dict['grid_coord']).cuda()
+
+    return data_dict
